@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Classic Helicopter Game</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            background-color: #efe7e7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            touch-action: none; 
+        }
+        canvas {
+            background-color: #87CEEB;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            max-width: 100%;
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<canvas id="gameCanvas" width="800" height="600"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+//chopper-control
+let chopper = {
+    x: 150,
+    y: 300,
+    radius: 20,
+    velocity: 0,
+    gravity: 0.4,
+    lift: -4.5
+};
+
+let obstacles = [];
+let score = 0;
+let gameOver = false;
+let isThrusting = false;
+let gameStarted = false;
+
+function resetObstacles() {
+    obstacles = [
+        createObstacle(900),
+        createObstacle(1300)
+    ];
+}
+
+function createObstacle(startX) {
+    let gap = 180;
+    let minHeight = 50;
+    let maxHeight = canvas.height - gap - minHeight;
+    let topHeight = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+    
+    return {
+        x: startX,
+        width: 80,
+        topHeight: topHeight,
+        bottomHeight: canvas.height - topHeight - gap,
+        speed: 5,
+        passed: false
+    };
+}
+
+function startThrust() {
+    if (gameOver) {
+        restartGame();
+        return;
+    }
+    if (!gameStarted) gameStarted = true;
+    isThrusting = true;
+}
+
+function stopThrust() {
+    isThrusting = false;
+}
+
+
+window.addEventListener("keydown", (e) => {
+    if (e.code === "Space") {
+        e.preventDefault();
+        startThrust();
+    }
+});
+window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") stopThrust();
+});
+
+canvas.addEventListener("mousedown", (e) => {
+    if (e.button === 0) startThrust();
+});
+canvas.addEventListener("mouseup", () => stopThrust());
+
+canvas.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    startThrust();
+});
+canvas.addEventListener("touchend", () => stopThrust());
+
+
+function restartGame() {
+    chopper.y = canvas.height / 2;
+    chopper.velocity = 0;
+    score = 0;
+    gameOver = false;
+    gameStarted = false;
+    isThrusting = false;
+    resetObstacles();
+}
+
+function checkCollision(c, o) {
+    let cLeft = c.x - c.radius;
+    let cRight = c.x + c.radius;
+    let cTop = c.y - c.radius;
+    let cBottom = c.y + c.radius;
+
+    if (cRight > o.x && cLeft < o.x + o.width) {
+        if (cTop < o.topHeight || cBottom > canvas.height - o.bottomHeight) {
+            return true;
+        }
+    }
+    return false;
+}
+
+function drawChopper() {
+    ctx.beginPath();
+    ctx.arc(chopper.x, chopper.y, chopper.radius, 0, Math.PI * 2);
+    ctx.fillStyle = "#DC143C";
+    ctx.fill();
+    ctx.closePath();
+
+    ctx.fillStyle = "#DC143C";
+    ctx.fillRect(chopper.x - 40, chopper.y - 5, 25, 10);
+
+    ctx.fillStyle = "#323232";
+    ctx.fillRect(chopper.x - 43, chopper.y - 15, 6, 25);
+
+    ctx.strokeStyle = "#323232";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(chopper.x - 30, chopper.y - 23);
+    ctx.lineTo(chopper.x + 30, chopper.y - 23);
+    ctx.stroke();
+
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(chopper.x, chopper.y);
+    ctx.lineTo(chopper.x, chopper.y - 23);
+    ctx.stroke();
+}
+
+function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (gameStarted && !gameOver) {
+        if (isThrusting) {
+            chopper.velocity = chopper.lift;
+        } else {
+            chopper.velocity += chopper.gravity;
+        }
+        chopper.y += chopper.velocity;
+
+        if (chopper.y < chopper.radius) {
+            chopper.y = chopper.radius;
+            chopper.velocity = 0;
+        }
+        if (chopper.y > canvas.height - chopper.radius) {
+            chopper.y = canvas.height - chopper.radius;
+            chopper.velocity = 0;
+        }
+
+        for (let i = 0; i < obstacles.length; i++) {
+            let o = obstacles[i];
+            o.x -= o.speed;
+
+            if (checkCollision(chopper, o)) {
+                gameOver = true;
+            }
+            // Score-Coutn
+            if (!o.passed && o.x + o.width < chopper.x) {
+                score++;
+                o.passed = true;
+            }
+        }
+
+        if (obstacles[0].x + obstacles[0].width < 0) {
+            obstacles.shift();
+            obstacles.push(createObstacle(canvas.width));
+        }
+    }
+
+    ctx.fillStyle = "#228B22";
+    obstacles.forEach(o => {
+        ctx.fillRect(o.x, 0, o.width, o.topHeight);
+        ctx.fillRect(o.x, canvas.height - o.bottomHeight, o.width, o.bottomHeight);
+    });
+
+    // chopper-desing
+    drawChopper();
+
+    // sccore-board
+    ctx.fillStyle = "#000";
+    ctx.font = "bold 28px Arial";
+    ctx.fillText("VeVe     Score: " + score, 20, 40);
+
+    if (!gameStarted && !gameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#fff";
+        ctx.font = "30px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("Click, Tap, or Spacebar to Fly", canvas.width / 2, canvas.height / 2);
+    }
+
+    if (gameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#DC143C";
+        ctx.font = "bold 45px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 30);
+        ctx.fillStyle = "#fff";
+        ctx.font = "25px Arial";
+        ctx.fillText("Tap or Press Space to Restart", canvas.width / 2, canvas.height / 2 + 20);
+    }
+
+    requestAnimationFrame(update);
+}
+
+resetObstacles();
+update();
+</script>
+
+</body>
+</html>
